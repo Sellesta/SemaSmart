@@ -1,6 +1,6 @@
 import { relations } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { boolean, check, date, foreignKey, index, integer, pgEnum, pgTable, serial, text, timestamp, unique, varchar } from "drizzle-orm/pg-core";
+import { boolean, check, date, foreignKey, index, integer, pgEnum, pgTable, primaryKey, serial, text, timestamp, unique, varchar } from "drizzle-orm/pg-core";
 
 export const courses = pgTable("courses", {
     id: serial("id").primaryKey(),
@@ -157,7 +157,10 @@ export const schoolMemberships = pgTable("school_memberships", {
     role: schoolMemberRoleEnum("role").notNull(),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
-    schoolUserUnique: unique("school_memberships_school_user_unique").on(table.schoolId, table.userId),
+    schoolUserPrimaryKey: primaryKey({
+        name: "school_memberships_pk",
+        columns: [table.schoolId, table.userId],
+    }),
     oneSchoolPerUser: unique("school_memberships_user_unique").on(table.userId),
     schoolRoleIdx: index("school_memberships_school_role_idx").on(table.schoolId, table.role),
 }));
@@ -176,15 +179,16 @@ export const classes = pgTable("classes", {
     createdByUserId: text("created_by_user_id").notNull(),
     name: text("name").notNull(),
     joinCode: varchar("join_code", { length: 8 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
-    schoolClassUnique: unique("classes_school_id_id_unique").on(table.schoolId, table.id),
+    schoolClassUnique: unique("classes_id_school_id_unique").on(table.id, table.schoolId),
     joinCodeUnique: unique("classes_join_code_unique").on(table.joinCode),
     classOwnerMembership: foreignKey({
         name: "classes_owner_membership_fk",
         columns: [table.schoolId, table.createdByUserId],
         foreignColumns: [schoolMemberships.schoolId, schoolMemberships.userId],
-    }),
+    }).onDelete("restrict"),
     joinCodeLength: check("classes_join_code_length", sql`char_length(${table.joinCode}) = 8`),
 }));
 
@@ -207,16 +211,22 @@ export const classMemberships = pgTable("class_memberships", {
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
     classStudentUnique: unique("class_memberships_class_user_unique").on(table.classId, table.userId),
+    userIdx: index("class_memberships_user_id_idx").on(table.userId),
+    classForeignKey: foreignKey({
+        name: "class_memberships_class_fk",
+        columns: [table.classId],
+        foreignColumns: [classes.id],
+    }).onDelete("restrict"),
     classSchoolForeignKey: foreignKey({
         name: "class_memberships_class_school_fk",
         columns: [table.classId, table.schoolId],
         foreignColumns: [classes.id, classes.schoolId],
-    }).onDelete("cascade"),
+    }).onDelete("restrict"),
     schoolMemberForeignKey: foreignKey({
         name: "class_memberships_school_member_fk",
         columns: [table.schoolId, table.userId],
         foreignColumns: [schoolMemberships.schoolId, schoolMemberships.userId],
-    }).onDelete("cascade"),
+    }).onDelete("restrict"),
 }));
 
 export const classMembershipsRelations = relations(classMemberships, ({ one }) => ({
