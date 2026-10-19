@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
-import { boolean, integer, pgEnum, pgTable, point, serial, text } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, check, date, foreignKey, index, integer, pgEnum, pgTable, serial, text, timestamp, unique, varchar } from "drizzle-orm/pg-core";
 
 export const courses = pgTable("courses", {
     id: serial("id").primaryKey(),
@@ -106,5 +107,152 @@ export const userProgressRelations = relations(userProgress, ({ one }) => ({
     activeCourse: one(courses, {
         fields: [userProgress.activeCourseId],
         references: [courses.id],
+    }),
+}));
+
+export const schoolMemberRoleEnum = pgEnum("school_member_role", ["student", "teacher"]);
+
+export const schools = pgTable("schools", {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const schoolsRelations = relations(schools, ({ many }) => ({
+    licenses: many(schoolLicenses),
+    memberships: many(schoolMemberships),
+    classes: many(classes),
+    teacherInvites: many(teacherInvites),
+}));
+
+export const schoolLicenses = pgTable("school_licenses", {
+    id: serial("id").primaryKey(),
+    schoolId: integer("school_id").references(() => schools.id, { onDelete: "restrict" }).notNull(),
+    tierLabel: text("tier_label").notNull(),
+    studentCap: integer("student_cap").notNull(),
+    startsAt: date("starts_at", { mode: "string" }).notNull(),
+    endsAt: date("ends_at", { mode: "string" }).notNull(),
+    graceDays: integer("grace_days").notNull().default(30),
+    invoiceReference: text("invoice_reference"),
+    paidAt: date("paid_at", { mode: "string" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+    schoolEndDateLookupIdx: index("school_licenses_school_end_date_idx").on(table.schoolId, table.endsAt),
+    positiveStudentCap: check("school_licenses_student_cap_positive", sql`${table.studentCap} > 0`),
+    nonnegativeGraceDays: check("school_licenses_grace_days_nonnegative", sql`${table.graceDays} >= 0`),
+    validDateRange: check("school_licenses_valid_date_range", sql`${table.startsAt} <= ${table.endsAt}`),
+}));
+
+export const schoolLicensesRelations = relations(schoolLicenses, ({ one }) => ({
+    school: one(schools, {
+        fields: [schoolLicenses.schoolId],
+        references: [schools.id],
+    }),
+}));
+
+export const schoolMemberships = pgTable("school_memberships", {
+    schoolId: integer("school_id").references(() => schools.id, { onDelete: "restrict" }).notNull(),
+    userId: text("user_id").notNull(),
+    role: schoolMemberRoleEnum("role").notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+    schoolUserUnique: unique("school_memberships_school_user_unique").on(table.schoolId, table.userId),
+    oneSchoolPerUser: unique("school_memberships_user_unique").on(table.userId),
+    schoolRoleIdx: index("school_memberships_school_role_idx").on(table.schoolId, table.role),
+}));
+
+export const schoolMembershipsRelations = relations(schoolMemberships, ({ one, many }) => ({
+    school: one(schools, {
+        fields: [schoolMemberships.schoolId],
+        references: [schools.id],
+    }),
+    classMemberships: many(classMemberships),
+}));
+
+export const classes = pgTable("classes", {
+    id: serial("id").primaryKey(),
+    schoolId: integer("school_id").references(() => schools.id, { onDelete: "restrict" }).notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    name: text("name").notNull(),
+    joinCode: varchar("join_code", { length: 8 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+    schoolClassUnique: unique("classes_school_id_id_unique").on(table.schoolId, table.id),
+    joinCodeUnique: unique("classes_join_code_unique").on(table.joinCode),
+    classOwnerMembership: foreignKey({
+        name: "classes_owner_membership_fk",
+        columns: [table.schoolId, table.createdByUserId],
+        foreignColumns: [schoolMemberships.schoolId, schoolMemberships.userId],
+    }),
+    joinCodeLength: check("classes_join_code_length", sql`char_length(${table.joinCode}) = 8`),
+}));
+
+export const classesRelations = relations(classes, ({ one, many }) => ({
+    school: one(schools, {
+        fields: [classes.schoolId],
+        references: [schools.id],
+    }),
+    owner: one(schoolMemberships, {
+        fields: [classes.schoolId, classes.createdByUserId],
+        references: [schoolMemberships.schoolId, schoolMemberships.userId],
+    }),
+    memberships: many(classMemberships),
+}));
+
+export const classMemberships = pgTable("class_memberships", {
+    classId: integer("class_id").notNull(),
+    schoolId: integer("school_id").notNull(),
+    userId: text("user_id").notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+    classStudentUnique: unique("class_memberships_class_user_unique").on(table.classId, table.userId),
+    classSchoolForeignKey: foreignKey({
+        name: "class_memberships_class_school_fk",
+        columns: [table.classId, table.schoolId],
+        foreignColumns: [classes.id, classes.schoolId],
+    }).onDelete("cascade"),
+    schoolMemberForeignKey: foreignKey({
+        name: "class_memberships_school_member_fk",
+        columns: [table.schoolId, table.userId],
+        foreignColumns: [schoolMemberships.schoolId, schoolMemberships.userId],
+    }).onDelete("cascade"),
+}));
+
+export const classMembershipsRelations = relations(classMemberships, ({ one }) => ({
+    class: one(classes, {
+        fields: [classMemberships.classId, classMemberships.schoolId],
+        references: [classes.id, classes.schoolId],
+    }),
+    member: one(schoolMemberships, {
+        fields: [classMemberships.schoolId, classMemberships.userId],
+        references: [schoolMemberships.schoolId, schoolMemberships.userId],
+    }),
+}));
+
+export const teacherInvites = pgTable("teacher_invites", {
+    id: serial("id").primaryKey(),
+    schoolId: integer("school_id").references(() => schools.id, { onDelete: "restrict" }).notNull(),
+    codeHash: text("code_hash").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    redeemedAt: timestamp("redeemed_at", { withTimezone: true }),
+    redeemedByUserId: text("redeemed_by_user_id"),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (table) => ({
+    codeHashUnique: unique("teacher_invites_code_hash_unique").on(table.codeHash),
+    schoolExpiryIdx: index("teacher_invites_school_expiry_idx").on(table.schoolId, table.expiresAt),
+    expiryAfterCreation: check("teacher_invites_expiry_after_creation", sql`${table.expiresAt} > ${table.createdAt}`),
+    redemptionFieldsPaired: check(
+        "teacher_invites_redemption_fields_paired",
+        sql`(${table.redeemedAt} is null) = (${table.redeemedByUserId} is null)`,
+    ),
+}));
+
+export const teacherInvitesRelations = relations(teacherInvites, ({ one }) => ({
+    school: one(schools, {
+        fields: [teacherInvites.schoolId],
+        references: [schools.id],
     }),
 }));
