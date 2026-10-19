@@ -1,15 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 
-const adminIds = [
-    "user_3KN0sClD3pTFNYluInjbuuLqCqn",
-];
-
-export const isAdmin = () => {
-    const { userId } = auth();
-
-    if (!userId) {
-        return false;
-    }
-
-    return adminIds.indexOf(userId) !== -1;
+export const isAdmin = async () => {
+    const user = await currentUser();
+    return user?.publicMetadata.role === "admin";
 }

@@ -6,7 +6,7 @@ import { lessons } from "@/db/schema";
 
 
 export const GET = async () => {
-    if (!isAdmin()) {
+    if (!(await isAdmin())) {
         return new NextResponse("Unauthorized", { status: 401 });
     }
     const data = await db.query.lessons.findMany();
@@ -15,7 +15,7 @@ export const GET = async () => {
 }
 
 export const POST = async (req: Request) => {
-    if (!isAdmin()) {
+    if (!(await isAdmin())) {
         return new NextResponse("Unauthorized", { status: 401 });
     }
 
@@ -27,4 +27,3 @@ export const POST = async (req: Request) => {
 
     return NextResponse.json(data[0]);
 }
-
