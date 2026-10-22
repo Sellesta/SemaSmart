@@ -1,6 +1,6 @@
-# Garrison
+# SemaSmart
 
-School-licensed language-learning web app (Duolingo-style), launching December 2026.
+School-licensed, gamified language-learning web app, launching December 2026.
 December launch languages: Mandarin Chinese, Japanese, German. Korean is not in the launch scope.
 
 ## Business model (confirmed; drives design decisions)

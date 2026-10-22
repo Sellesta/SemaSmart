@@ -10,7 +10,7 @@ import { PracticeModal } from "@/components/modals/practice-modal";
 const font = Nunito({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Garrison",
+  title: "SemaSmart",
   description: "Language Learning Platform",
 };
 
