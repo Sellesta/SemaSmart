@@ -9,7 +9,7 @@ December launch languages: Mandarin Chinese, Japanese, German. Korean is not in 
 - Many students are minors. Keep student data minimal, never visible across schools, and avoid public profiles.
 
 ## Stack
-Next.js 14 (App Router), Clerk v5 for auth, Neon Postgres through drizzle-orm (neon-http driver), react-admin at `/admin`, Tailwind with Radix/shadcn components, zustand for client state.
+Next.js 14 (App Router), Clerk v5 for auth, Neon Postgres through drizzle-orm 0.45.x (neon-http driver) and drizzle-kit 0.31.x, react-admin at `/admin`, Tailwind with Radix/shadcn components, zustand for client state.
 
 ## Commands
 - `npm run dev`, `npm run build`, `npm run lint`
@@ -26,7 +26,8 @@ Next.js 14 (App Router), Clerk v5 for auth, Neon Postgres through drizzle-orm (n
 
 ## Safety rules
 - Ask before running any database command (`db:push`, `db:seed`, `db:prod`, `db:reset`). Only run them against a Neon dev branch, never the main database.
-- Before `db:push`, tell me what drizzle-kit would drop or alter.
+- The local `.env` points at the Neon dev branch; production changes happen only deliberately by me.
+- `db:push` runs with `verbose` and `strict` enabled. Always read the generated SQL and abort on any `DROP CONSTRAINT` or any statement touching tables outside the school layer.
 - Never read, print or commit `.env*` files, and never paste secrets into code, logs or chat.
 - Content imports must never delete rows: deleting units, lessons or challenges cascades to student progress. Update by stable key instead.
 
@@ -46,6 +47,7 @@ Next.js 14 (App Router), Clerk v5 for auth, Neon Postgres through drizzle-orm (n
 2. `getTopTenUsers` in `db/queries.ts` is a global leaderboard showing first names and photos. Scope it to a class or school.
 3. `lib/adminAuth.ts` hard-codes one admin Clerk ID; use Clerk role metadata. `next.config.mjs` sets CORS to `*` (header typo `Allow-Mwthods`); restrict it.
 4. Before launch: staging (Neon branch plus preview deploy), generated migrations instead of `db:push` for production, error monitoring, privacy policy and consent.
+5. Seed scripts insert explicit ids, so run `sql/reset-sequences.sql` afterwards. The content import script must never set ids itself.
 
 ## Working style
 - TypeScript throughout; mutations are server actions followed by `revalidatePath`.

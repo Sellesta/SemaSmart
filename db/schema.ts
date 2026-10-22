@@ -157,9 +157,10 @@ export const schoolMemberships = pgTable("school_memberships", {
     role: schoolMemberRoleEnum("role").notNull(),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
+    // Column order is intentionally reversed: drizzle-kit reads composite constraint columns in an unspecified order, and this order keeps db:push free of false DROP/ADD diffs. Don't reorder.
     schoolUserPrimaryKey: primaryKey({
         name: "school_memberships_pk",
-        columns: [table.schoolId, table.userId],
+        columns: [table.userId, table.schoolId],
     }),
     oneSchoolPerUser: unique("school_memberships_user_unique").on(table.userId),
     schoolRoleIdx: index("school_memberships_school_role_idx").on(table.schoolId, table.role),
@@ -182,7 +183,8 @@ export const classes = pgTable("classes", {
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
-    schoolClassUnique: unique("classes_id_school_id_unique").on(table.id, table.schoolId),
+    // Column order is intentionally reversed: drizzle-kit reads composite constraint columns in an unspecified order, and this order keeps db:push free of false DROP/ADD diffs. Don't reorder.
+    schoolClassUnique: unique("classes_id_school_id_unique").on(table.schoolId, table.id),
     joinCodeUnique: unique("classes_join_code_unique").on(table.joinCode),
     classOwnerMembership: foreignKey({
         name: "classes_owner_membership_fk",
@@ -210,7 +212,8 @@ export const classMemberships = pgTable("class_memberships", {
     userId: text("user_id").notNull(),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
-    classStudentUnique: unique("class_memberships_class_user_unique").on(table.classId, table.userId),
+    // Column order is intentionally reversed: drizzle-kit reads composite constraint columns in an unspecified order, and this order keeps db:push free of false DROP/ADD diffs. Don't reorder.
+    classStudentUnique: unique("class_memberships_class_user_unique").on(table.userId, table.classId),
     userIdx: index("class_memberships_user_id_idx").on(table.userId),
     classForeignKey: foreignKey({
         name: "class_memberships_class_fk",
