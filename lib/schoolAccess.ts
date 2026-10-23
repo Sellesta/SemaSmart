@@ -9,6 +9,7 @@ import {
 } from "./licenceStatus";
 
 export type SchoolAccessStatus = "no_membership" | LicenceStatus;
+export type SchoolMemberRole = "student" | "teacher";
 
 export const getSchoolAccessStatus = async (
   today: Date = new Date(),
@@ -46,4 +47,19 @@ export const getSchoolAccessStatus = async (
   });
 
   return getBestLicenceStatus(licences, today);
+};
+
+export const getSchoolMembershipRole =
+  async (): Promise<SchoolMemberRole | null> => {
+  const { userId } = await auth();
+  if (!userId) {
+    return null;
+  }
+
+  const membership = await db.query.schoolMemberships.findFirst({
+    where: eq(schoolMemberships.userId, userId),
+    columns: { role: true },
+  });
+
+  return membership?.role ?? null;
 };
