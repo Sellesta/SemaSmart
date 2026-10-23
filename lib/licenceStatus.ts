@@ -6,6 +6,10 @@ type Licence = Pick<
 >;
 
 export type LicenceStatus = "active" | "grace" | "expired";
+export type LicenceRecord = Pick<
+  typeof schoolLicenses.$inferSelect,
+  "startsAt" | "endsAt" | "graceDays"
+>;
 
 const millisecondsPerDay = 24 * 60 * 60 * 1000;
 
@@ -13,7 +17,7 @@ const dateToDayNumber = (date: string) =>
   Date.parse(`${date}T00:00:00.000Z`) / millisecondsPerDay;
 
 export const getLicenceStatus = (
-  licence: Licence,
+  licence: LicenceRecord,
   today: Date,
 ): LicenceStatus => {
   if (Number.isNaN(today.getTime())) {
@@ -42,3 +46,23 @@ export const getLicenceStatus = (
 
   return "expired";
 };
+
+const licenceStatusRank: Record<LicenceStatus, number> = {
+  active: 2,
+  grace: 1,
+  expired: 0,
+};
+
+export const getBestLicenceStatus = (
+  licences: LicenceRecord[],
+  today: Date,
+): LicenceStatus =>
+  licences.reduce<LicenceStatus>(
+    (bestStatus, licence) => {
+      const status = getLicenceStatus(licence, today);
+      return licenceStatusRank[status] > licenceStatusRank[bestStatus]
+        ? status
+        : bestStatus;
+    },
+    "expired",
+  );

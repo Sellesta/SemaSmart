@@ -1,9 +1,12 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import db from "@/db/drizzle";
 import { schoolLicenses, schoolMemberships, schools } from "@/db/schema";
-import { getLicenceStatus, type LicenceStatus } from "./licenceStatus";
+import {
+  getBestLicenceStatus,
+  type LicenceStatus,
+} from "./licenceStatus";
 
 export type SchoolAccessStatus = "no_membership" | LicenceStatus;
 
@@ -38,14 +41,9 @@ export const getSchoolAccessStatus = async (
     return "expired";
   }
 
-  const licence = await db.query.schoolLicenses.findFirst({
+  const licences = await db.query.schoolLicenses.findMany({
     where: eq(schoolLicenses.schoolId, membership.schoolId),
-    orderBy: [desc(schoolLicenses.endsAt), desc(schoolLicenses.id)],
   });
 
-  if (!licence) {
-    return "expired";
-  }
-
-  return getLicenceStatus(licence, today);
+  return getBestLicenceStatus(licences, today);
 };
