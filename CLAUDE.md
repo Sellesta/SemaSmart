@@ -16,6 +16,7 @@ Next.js 14 (App Router), Clerk v5 for auth, Neon Postgres through drizzle-orm 0.
 - `npm run db:push` applies `db/schema.ts` to the database (no migrations folder yet)
 - `npm run db:studio` opens Drizzle Studio
 - `npm run db:seed`, `npm run db:prod`, `npm run db:reset` are DESTRUCTIVE (they delete rows). See safety rules.
+- `npm run content:import -- <csv>` previews a content import; add `--apply` to write, or `NODE_ENV=development npm run content:import -- <csv> --include-draft` to include drafts.
 
 ## Layout
 - `db/schema.ts` tables, `db/queries.ts` cached reads, `db/drizzle.ts` client

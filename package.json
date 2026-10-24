@@ -12,7 +12,8 @@
     "db:push": "npx drizzle-kit push",
     "db:seed": "tsx ./scripts/seed.ts",
     "db:prod": "tsx ./scripts/prod.ts",
-    "db:reset": "tsx ./scripts/reset.ts"
+    "db:reset": "tsx ./scripts/reset.ts",
+    "content:import": "tsx ./scripts/import-content.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^5.2.3",
@@ -25,6 +26,7 @@
     "@radix-ui/react-toast": "^1.2.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "csv-parse": "^7.0.3",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.4",
     "lucide-react": "^0.408.0",
