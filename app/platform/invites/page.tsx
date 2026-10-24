@@ -1,9 +1,11 @@
 import { desc, eq } from "drizzle-orm";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import db from "@/db/drizzle";
 import { schools, teacherInvites } from "@/db/schema";
 import { isAdmin } from "@/lib/adminAuth";
+import { Button } from "@/components/ui/button";
 import { InviteManager } from "./invite-manager";
 
 type Props = {
@@ -64,6 +66,11 @@ const PlatformInvitesPage = async ({ searchParams }: Props) => {
       <h1 className="text-3xl font-extrabold text-neutral-700">
         Teacher invites
       </h1>
+      <div className="mt-4">
+        <Link href="/platform/schools">
+          <Button variant="default">Schools and licences</Button>
+        </Link>
+      </div>
       {selectedSchool ? (
         <InviteManager
           schools={allSchools}
