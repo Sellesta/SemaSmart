@@ -51,7 +51,10 @@ export const InviteManager = ({
     setMessage(null);
     startTransition(async () => {
       try {
-        await revokeTeacherInvite(inviteId, selectedSchoolId);
+        const result = await revokeTeacherInvite(inviteId, selectedSchoolId);
+        if (result.status === "not_open") {
+          setMessage("This invite was already used, revoked or expired");
+        }
         router.refresh();
       } catch {
         setMessage("Could not revoke the invite. It may no longer be open.");

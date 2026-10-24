@@ -81,10 +81,14 @@ export const createTeacherInvite = async (
   throw new Error("Unable to generate a unique teacher invite code");
 };
 
+export type RevokeTeacherInviteResult =
+  | { status: "revoked" }
+  | { status: "not_open" };
+
 export const revokeTeacherInvite = async (
   inviteIdInput: unknown,
   schoolIdInput: unknown,
-): Promise<void> => {
+): Promise<RevokeTeacherInviteResult> => {
   await requirePlatformAdmin();
   const inviteId = requirePositiveSchoolId(inviteIdInput);
   const schoolId = requirePositiveSchoolId(schoolIdInput);
@@ -104,8 +108,9 @@ export const revokeTeacherInvite = async (
     .returning({ id: teacherInvites.id });
 
   if (!revokedInvite) {
-    throw new Error("Only open invites can be revoked");
+    return { status: "not_open" };
   }
 
   revalidatePath("/platform/invites");
+  return { status: "revoked" };
 };
