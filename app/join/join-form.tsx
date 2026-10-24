@@ -14,6 +14,8 @@ const joinErrorMessages = {
     "Your school has reached its student limit. Please contact your teacher.",
   other_school:
     "Your account is already linked to another school. Contact SemaSmart for help.",
+  teacher_account:
+    "Teachers join with an invitation from SemaSmart, not a class code.",
 } as const;
 
 export const JoinForm = () => {

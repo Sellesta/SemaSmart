@@ -23,7 +23,8 @@ export type JoinClassResult =
   | { status: "invalid_code" }
   | { status: "licence_expired" }
   | { status: "seat_cap_reached" }
-  | { status: "other_school" };
+  | { status: "other_school" }
+  | { status: "teacher_account" };
 
 const maxClassCodeAttempts = 10;
 
@@ -65,13 +66,20 @@ const lockClassCode = async (
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${code}))`);
 };
 
-export const joinClassByCode = async (code: string): Promise<JoinClassResult> => {
-  const userId = await requireUserId();
+export const joinClassByCode = async (
+  code: unknown,
+): Promise<JoinClassResult> => {
+  if (typeof code !== "string") {
+    return { status: "invalid_code" };
+  }
+
   const normalizedCode = normalizeClassCode(code);
 
   if (!isValidClassCode(normalizedCode)) {
     return { status: "invalid_code" };
   }
+
+  const userId = await requireUserId();
 
   return transactionalDb.transaction(async (tx) => {
     const [classRecord] = await tx
@@ -117,7 +125,7 @@ export const joinClassByCode = async (code: string): Promise<JoinClassResult> =>
       return { status: "other_school" };
     }
     if (existingMembership?.role === "teacher") {
-      throw new Error("Only student memberships can join a class");
+      return { status: "teacher_account" };
     }
 
     const licences = await tx
@@ -185,7 +193,7 @@ export const joinClassByCode = async (code: string): Promise<JoinClassResult> =>
         return { status: "other_school" };
       }
       if (concurrentMembership.role !== "student") {
-        throw new Error("Only student memberships can join a class");
+        return { status: "teacher_account" };
       }
     }
 
@@ -203,13 +211,18 @@ export const joinClassByCode = async (code: string): Promise<JoinClassResult> =>
 };
 
 export const createClass = async (
-  name: string,
+  name: unknown,
 ): Promise<{ id: number; joinCode: string }> => {
-  const userId = await requireUserId();
-  const className = name.trim();
-  if (!className) {
-    throw new RangeError("Class name is required");
+  if (typeof name !== "string") {
+    throw new TypeError("Class name must be a string");
   }
+
+  const className = name.trim();
+  if (className.length < 1 || className.length > 100) {
+    throw new RangeError("Class name must be between 1 and 100 characters");
+  }
+
+  const userId = await requireUserId();
 
   return transactionalDb.transaction(async (tx) => {
     const schoolId = await requireTeacherSchoolId(tx, userId);
@@ -238,9 +251,22 @@ export const createClass = async (
   });
 };
 
+const requirePositiveClassId = (classId: unknown): number => {
+  if (
+    typeof classId !== "number" ||
+    !Number.isInteger(classId) ||
+    classId <= 0
+  ) {
+    throw new RangeError("Class id must be a positive integer");
+  }
+  return classId;
+};
+
+// Any teacher of the school may manage any class in that school, deliberately.
 export const regenerateClassCode = async (
-  classId: number,
+  classId: unknown,
 ): Promise<{ joinCode: string }> => {
+  const validClassId = requirePositiveClassId(classId);
   const userId = await requireUserId();
 
   return transactionalDb.transaction(async (tx) => {
@@ -248,7 +274,7 @@ export const regenerateClassCode = async (
     const [classRecord] = await tx
       .select({ id: classes.id })
       .from(classes)
-      .where(and(eq(classes.id, classId), eq(classes.schoolId, schoolId)))
+      .where(and(eq(classes.id, validClassId), eq(classes.schoolId, schoolId)))
       .for("update")
       .limit(1);
 
@@ -263,7 +289,7 @@ export const regenerateClassCode = async (
       const [collision] = await tx
         .select({ id: classes.id })
         .from(classes)
-        .where(and(eq(classes.joinCode, joinCode), ne(classes.id, classId)))
+        .where(and(eq(classes.joinCode, joinCode), ne(classes.id, validClassId)))
         .limit(1);
 
       if (collision) {
@@ -273,7 +299,7 @@ export const regenerateClassCode = async (
       const [updatedClass] = await tx
         .update(classes)
         .set({ joinCode })
-        .where(eq(classes.id, classId))
+        .where(eq(classes.id, validClassId))
         .returning({ joinCode: classes.joinCode });
 
       if (updatedClass) {
@@ -285,7 +311,9 @@ export const regenerateClassCode = async (
   });
 };
 
-export const archiveClass = async (classId: number): Promise<void> => {
+// Any teacher of the school may manage any class in that school, deliberately.
+export const archiveClass = async (classId: unknown): Promise<void> => {
+  const validClassId = requirePositiveClassId(classId);
   const userId = await requireUserId();
 
   await transactionalDb.transaction(async (tx) => {
@@ -293,7 +321,9 @@ export const archiveClass = async (classId: number): Promise<void> => {
     const [archivedClass] = await tx
       .update(classes)
       .set({ isActive: false })
-      .where(and(eq(classes.id, classId), eq(classes.schoolId, schoolId)))
+      .where(
+        and(eq(classes.id, validClassId), eq(classes.schoolId, schoolId)),
+      )
       .returning({ id: classes.id });
 
     if (!archivedClass) {
