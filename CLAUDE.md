@@ -27,6 +27,7 @@ Next.js 14 (App Router), Clerk v5 for auth, Neon Postgres through drizzle-orm 0.
 ## Safety rules
 - Ask before running any database command (`db:push`, `db:seed`, `db:prod`, `db:reset`). Only run them against a Neon dev branch, never the main database.
 - The local `.env` points at the Neon dev branch; production changes happen only deliberately by me.
+- Set `INVITE_CODE_SECRET` in the local environment for teacher invites. Never log or expose its value.
 - `db:push` runs with `verbose` and `strict` enabled. Always read the generated SQL and abort on any `DROP CONSTRAINT` or any statement touching tables outside the school layer.
 - Never read, print or commit `.env*` files, and never paste secrets into code, logs or chat.
 - Content imports must never delete rows: deleting units, lessons or challenges cascades to student progress. Update by stable key instead.

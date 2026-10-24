@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { JoinForm } from "./join-form";
@@ -19,6 +20,15 @@ const JoinPage = async () => {
           Enter the class code from your teacher to join your school.
         </p>
         <JoinForm />
+        <p className="mt-5 text-center text-sm text-slate-500">
+          Are you a teacher?{" "}
+          <Link
+            href="/join/teacher"
+            className="font-bold text-sky-600 hover:underline"
+          >
+            I&apos;m a teacher
+          </Link>
+        </p>
       </section>
     </main>
   );

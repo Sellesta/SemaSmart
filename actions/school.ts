@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { and, count, desc, eq, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, ne, sql } from "drizzle-orm";
 
 import transactionalDb from "@/db/transactional";
 import {
@@ -10,6 +10,7 @@ import {
   schoolLicenses,
   schoolMemberships,
   schools,
+  teacherInvites,
 } from "@/db/schema";
 import {
   generateClassCode,
@@ -17,6 +18,11 @@ import {
   normalizeClassCode,
 } from "@/lib/classCodes";
 import { getLicenceStatus } from "@/lib/licenceStatus";
+import {
+  hashInviteCode,
+  isValidInviteCode,
+  normalizeInviteCode,
+} from "@/lib/teacherInviteCodes";
 
 export type JoinClassResult =
   | { status: "ok"; classId: number }
@@ -25,6 +31,12 @@ export type JoinClassResult =
   | { status: "seat_cap_reached" }
   | { status: "other_school" }
   | { status: "teacher_account" };
+
+export type RedeemTeacherInviteResult =
+  | { status: "ok" }
+  | { status: "invalid_code" }
+  | { status: "other_school" }
+  | { status: "already_student" };
 
 const maxClassCodeAttempts = 10;
 
@@ -64,6 +76,121 @@ const lockClassCode = async (
   code: string,
 ) => {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${code}))`);
+};
+
+class InviteRedemptionRejected extends Error {
+  constructor(readonly result: RedeemTeacherInviteResult) {
+    super(result.status);
+  }
+}
+
+const getInviteCodeSecret = (): string => {
+  const secret = process.env.INVITE_CODE_SECRET;
+  if (!secret) {
+    throw new Error("INVITE_CODE_SECRET is required");
+  }
+  return secret;
+};
+
+export const redeemTeacherInvite = async (
+  code: unknown,
+): Promise<RedeemTeacherInviteResult> => {
+  if (typeof code !== "string") {
+    return { status: "invalid_code" };
+  }
+
+  const normalizedCode = normalizeInviteCode(code);
+  if (!isValidInviteCode(normalizedCode)) {
+    return { status: "invalid_code" };
+  }
+
+  const userId = await requireUserId();
+  const codeHash = hashInviteCode(normalizedCode, getInviteCodeSecret());
+  const now = new Date();
+
+  try {
+    return await transactionalDb.transaction(async (tx) => {
+      const [claimedInvite] = await tx
+        .update(teacherInvites)
+        .set({ redeemedAt: now, redeemedByUserId: userId })
+        .where(
+          and(
+            eq(teacherInvites.codeHash, codeHash),
+            isNull(teacherInvites.redeemedAt),
+            isNull(teacherInvites.revokedAt),
+            gt(teacherInvites.expiresAt, now),
+          ),
+        )
+        .returning({ schoolId: teacherInvites.schoolId });
+
+      if (!claimedInvite) {
+        return { status: "invalid_code" };
+      }
+
+      await tx
+        .select({ id: schools.id })
+        .from(schools)
+        .where(eq(schools.id, claimedInvite.schoolId))
+        .for("update")
+        .limit(1);
+
+      const [membership] = await tx
+        .select({
+          schoolId: schoolMemberships.schoolId,
+          role: schoolMemberships.role,
+        })
+        .from(schoolMemberships)
+        .where(eq(schoolMemberships.userId, userId))
+        .limit(1);
+
+      if (
+        membership?.schoolId &&
+        membership.schoolId !== claimedInvite.schoolId
+      ) {
+        throw new InviteRedemptionRejected({ status: "other_school" });
+      }
+      if (membership?.role === "student") {
+        throw new InviteRedemptionRejected({ status: "already_student" });
+      }
+
+      if (!membership) {
+        const [insertedMembership] = await tx
+          .insert(schoolMemberships)
+          .values({
+            schoolId: claimedInvite.schoolId,
+            userId,
+            role: "teacher",
+          })
+          .onConflictDoNothing()
+          .returning({ schoolId: schoolMemberships.schoolId });
+
+        if (!insertedMembership) {
+          const [concurrentMembership] = await tx
+            .select({
+              schoolId: schoolMemberships.schoolId,
+              role: schoolMemberships.role,
+            })
+            .from(schoolMemberships)
+            .where(eq(schoolMemberships.userId, userId))
+            .limit(1);
+
+          if (concurrentMembership?.schoolId !== claimedInvite.schoolId) {
+            throw new InviteRedemptionRejected({ status: "other_school" });
+          }
+          if (concurrentMembership.role === "student") {
+            throw new InviteRedemptionRejected({ status: "already_student" });
+          }
+        }
+      }
+
+      return { status: "ok" };
+    });
+  } catch (error) {
+    if (error instanceof InviteRedemptionRejected) {
+      return error.result;
+    }
+    throw error;
+  }
 };
 
 export const joinClassByCode = async (
