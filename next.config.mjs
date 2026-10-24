@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    // Keep ws out of the webpack bundle: bundled, it fails with "bufferUtil.mask is not a function".
+    // Next 15 renames this option to serverExternalPackages.
+    serverComponentsExternalPackages: ["ws"],
+  },
   async headers() {
     return [
       {
